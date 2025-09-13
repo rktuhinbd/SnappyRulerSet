@@ -14,24 +14,36 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.CropSquare
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.PanTool
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -158,90 +170,51 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
             TopAppBar(title = { Text("Snappy Ruler Set") })
         },
         bottomBar = {
-            BottomAppBar(actions = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(modifier = Modifier.weight(1f, false).horizontalScroll(rememberScrollState())) {
-                        // Modes (scrollable)
-                        FilterChip(onClick = { mode = Mode.Move }, selected = mode == Mode.Move, label = { Text("Drag") })
-                        Spacer(Modifier.width(6.dp))
-                        FilterChip(onClick = { mode = Mode.Pencil }, selected = mode == Mode.Pencil, label = { Text("Pencil") })
-                        Spacer(Modifier.width(6.dp))
-                        FilterChip(onClick = { mode = Mode.Line }, selected = mode == Mode.Line, label = { Text("Line") })
-                        Spacer(Modifier.width(6.dp))
-                        FilterChip(onClick = { mode = Mode.RulerLine }, selected = mode == Mode.RulerLine, label = { Text("RulerLine") })
-                        Spacer(Modifier.width(6.dp))
-                        FilterChip(onClick = { mode = Mode.SquareLine }, selected = mode == Mode.SquareLine, label = { Text("SquareLine") })
-                        Spacer(Modifier.width(6.dp))
-                        FilterChip(onClick = { mode = Mode.Protractor }, selected = mode == Mode.Protractor, label = { Text("Protractor") })
-                        Spacer(Modifier.width(6.dp))
-                        FilterChip(onClick = { mode = Mode.Compass }, selected = mode == Mode.Compass, label = { Text("Compass") })
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Row {
-                        IconButton(onClick = { vm.undo() }) { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo") }
-                        IconButton(onClick = { vm.redo() }) { Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo") }
+            BottomAppBar(
+                actions = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        IconButton(onClick = { vm.undo() }) { 
+                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo") 
+                        }
+                        IconButton(onClick = { vm.redo() }) { 
+                            Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo") 
+                        }
                         IconButton(onClick = {
                             val width = if (canvasSize.width > 0) canvasSize.width else 1080
                             val height = if (canvasSize.height > 0) canvasSize.height else 1920
                             val shareIntent = com.rkt.snappyrulerset.export.Exporter.createShareIntentPng(context, state, state.viewport, width, height)
                             context.startActivity(Intent.createChooser(shareIntent, "Share Drawing"))
-                        }) { Icon(Icons.Filled.Share, contentDescription = "Share") }
-                    }
-                }
-            }, floatingActionButton = {
-                FloatingActionButton(onClick = {
-                    val width = if (canvasSize.width > 0) canvasSize.width else 1080
-                    val height = if (canvasSize.height > 0) canvasSize.height else 1920
+                        }) { 
+                            Icon(Icons.Filled.Share, contentDescription = "Share") 
+                        }
+                        IconButton(onClick = {
+                            val width = if (canvasSize.width > 0) canvasSize.width else 1080
+                            val height = if (canvasSize.height > 0) canvasSize.height else 1920
 
-                    // Check and request permissions for Android 13+
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        val permission = Manifest.permission.READ_MEDIA_IMAGES
-                        if (ContextCompat.checkSelfPermission(ctx, permission) != PackageManager.PERMISSION_GRANTED) {
-                            permissionLauncher.launch(permission)
-                            return@FloatingActionButton
+                            // Check and request permissions for Android 13+
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                val permission = Manifest.permission.READ_MEDIA_IMAGES
+                                if (ContextCompat.checkSelfPermission(ctx, permission) != PackageManager.PERMISSION_GRANTED) {
+                                    permissionLauncher.launch(permission)
+                                    return@IconButton
+                                }
+                            }
+
+                            saveToGallery(ctx, state, width, height)
+                        }) { 
+                            Icon(Icons.Filled.Save, contentDescription = "Save") 
                         }
                     }
-
-                    saveToGallery(ctx, state, width, height)
-                }) { Icon(Icons.Filled.Save, contentDescription = "Save") }
-            })
+                }
+            )
         }
     ) { pad ->
         Box(Modifier
             .fillMaxSize()
             .padding(pad)) {
-            // Tools row under title (scrollable)
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 56.dp, start = 12.dp, end = 12.dp)
-                    .horizontalScroll(rememberScrollState())
-                    .background(Color(0xCCFFFFFF), shape = RoundedCornerShape(12.dp))
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
-            ) {
-                FilterChip(onClick = { activeTool = ToolKind.Ruler; mode = Mode.Tool }, selected = activeTool == ToolKind.Ruler && mode == Mode.Tool, label = { Text("Ruler") })
-                Spacer(Modifier.width(6.dp))
-                FilterChip(onClick = { activeTool = ToolKind.SetSquare45; mode = Mode.Tool }, selected = activeTool == ToolKind.SetSquare45 && mode == Mode.Tool, label = { Text("SetSq 45°") })
-                Spacer(Modifier.width(6.dp))
-                FilterChip(onClick = { activeTool = ToolKind.SetSquare30_60; mode = Mode.Tool }, selected = activeTool == ToolKind.SetSquare30_60 && mode == Mode.Tool, label = { Text("SetSq 30/60°") })
-                Spacer(Modifier.width(6.dp))
-                FilterChip(onClick = { activeTool = ToolKind.Protractor; mode = Mode.Tool }, selected = activeTool == ToolKind.Protractor && mode == Mode.Tool, label = { Text("Protractor") })
-                Spacer(Modifier.width(6.dp))
-                FilterChip(onClick = { activeTool = ToolKind.Compass; mode = Mode.Tool }, selected = activeTool == ToolKind.Compass && mode == Mode.Tool, label = { Text("Compass") })
-                Spacer(Modifier.width(6.dp))
-                if (activeTool == ToolKind.Compass) {
-                    FilterChip(
-                        onClick = { compassMode = if (compassMode == CompassMode.Circle) CompassMode.Arc else CompassMode.Circle },
-                        selected = true,
-                        label = { Text(if (compassMode == CompassMode.Circle) "Circle" else "Arc") }
-                    )
-                }
-            }
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
@@ -757,6 +730,94 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                 }
             }
 
+            // Drawing options in top left corner with glassy effect
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 56.dp, start = 12.dp)
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.25f),
+                                Color.White.copy(alpha = 0.15f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.4f),
+                                Color.White.copy(alpha = 0.2f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                // Drawing modes with circular icons (scrollable)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Move/Drag tool
+                    CircularIconButton(
+                        onClick = { mode = Mode.Move },
+                        selected = mode == Mode.Move,
+                        icon = Icons.Default.PanTool,
+                        contentDescription = "Move/Drag Tool"
+                    )
+                    
+                    // Pencil tool
+                    CircularIconButton(
+                        onClick = { mode = Mode.Pencil },
+                        selected = mode == Mode.Pencil,
+                        icon = Icons.Default.Edit,
+                        contentDescription = "Pencil Tool"
+                    )
+                    
+                    // Line tool
+                    CircularIconButton(
+                        onClick = { mode = Mode.Line },
+                        selected = mode == Mode.Line,
+                        icon = Icons.Default.ShowChart,
+                        contentDescription = "Line Tool"
+                    )
+                    
+                    // Ruler line tool
+                    CircularIconButton(
+                        onClick = { mode = Mode.RulerLine },
+                        selected = mode == Mode.RulerLine,
+                        icon = Icons.Default.Straighten,
+                        contentDescription = "Ruler Line Tool"
+                    )
+                    
+                    // Square line tool
+                    CircularIconButton(
+                        onClick = { mode = Mode.SquareLine },
+                        selected = mode == Mode.SquareLine,
+                        icon = Icons.Default.CropSquare,
+                        contentDescription = "Square Line Tool"
+                    )
+                    
+                    // Protractor tool
+                    CircularIconButton(
+                        onClick = { mode = Mode.Protractor },
+                        selected = mode == Mode.Protractor,
+                        icon = Icons.Default.Explore,
+                        contentDescription = "Protractor Tool"
+                    )
+                    
+                    // Compass tool
+                    CircularIconButton(
+                        onClick = { mode = Mode.Compass },
+                        selected = mode == Mode.Compass,
+                        icon = Icons.Default.RadioButtonUnchecked,
+                        contentDescription = "Compass Tool"
+                    )
+                }
+            }
+
             if (hud.isNotEmpty() && (mode == Mode.Line || mode == Mode.RulerLine || mode == Mode.SquareLine || mode == Mode.Protractor || mode == Mode.Compass)) {
                 Column(
                     modifier = Modifier
@@ -914,6 +975,54 @@ private fun triangleWorldPoints(
     return raw.map { center + rot(it) }
 }
 
+
+@Composable
+fun CircularIconButton(
+    onClick: () -> Unit,
+    selected: Boolean,
+    icon: ImageVector,
+    contentDescription: String
+) {
+    val backgroundColor = if (selected) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+    } else {
+        Color.Transparent
+    }
+    
+    val iconColor = if (selected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+    }
+    
+    val borderColor = if (selected) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+    } else {
+        Color.Transparent
+    }
+    
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(48.dp)
+            .background(
+                color = backgroundColor,
+                shape = CircleShape
+            )
+            .border(
+                width = if (selected) 2.dp else 0.dp,
+                color = borderColor,
+                shape = CircleShape
+            )
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = iconColor,
+            modifier = Modifier.size(24.dp)
+        )
+    }
+}
 
 @Preview(showBackground = true)
 @Composable
