@@ -98,6 +98,24 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
     // Mode / Tool
     var mode by remember { mutableStateOf(Mode.Move) }
     var activeTool by remember { mutableStateOf(ToolKind.SetSquare45) } // default to triangle to see it immediately
+    
+    // Smooth pan state for better performance
+    var smoothPan by remember { mutableStateOf(Vec2(0f, 0f)) }
+    
+    // Apply smooth pan changes to viewport with debouncing
+    LaunchedEffect(smoothPan) {
+        if (smoothPan != Vec2(0f, 0f)) {
+            kotlinx.coroutines.delay(16) // Debounce to ~60fps
+            vm.update { s ->
+                s.copy(
+                    viewport = s.viewport.copy(
+                        pan = s.viewport.pan + smoothPan
+                    )
+                )
+            }
+            smoothPan = Vec2(0f, 0f) // Reset after applying
+        }
+    }
 
     // Tool transform (shared: ruler or set square)
     var toolPos by remember { mutableStateOf(Vec2(0f, 0f)) }
@@ -302,16 +320,8 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                                     when (mode) {
                                         Mode.Move -> {
                                             val panDelta = event.calculatePan()
-                                            vm.update { s ->
-                                                s.copy(
-                                                    viewport = s.viewport.copy(
-                                                        pan = s.viewport.pan + Vec2(
-                                                            panDelta.x,
-                                                            panDelta.y
-                                                        ) * (1f / s.viewport.zoom)
-                                                    )
-                                                )
-                                            }
+                                            // Use smooth pan for better performance
+                                            smoothPan += Vec2(panDelta.x, panDelta.y) * (1f / state.viewport.zoom)
                                             changes.forEach { it.consume() }
                                         }
 
@@ -535,10 +545,14 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                         }
                     }
             ) {
-                // world->screen
+                // world->screen with smooth pan
                 fun w2s(p: Vec2): Offset {
                     val z = state.viewport.zoom
-                    val pan = state.viewport.pan
+                    val pan = if (mode == Mode.Move) {
+                        state.viewport.pan + smoothPan
+                    } else {
+                        state.viewport.pan
+                    }
                     return Offset((p.x - pan.x) * z, (p.y - pan.y) * z)
                 }
 
@@ -548,8 +562,13 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                 if (step > 8f && step < 200f) { // Only draw grid when visible and not too dense
                     val w = size.width
                     val h = size.height
-                    val startX = -((state.viewport.pan.x * state.viewport.zoom) % step)
-                    val startY = -((state.viewport.pan.y * state.viewport.zoom) % step)
+                    val currentPan = if (mode == Mode.Move) {
+                        state.viewport.pan + smoothPan
+                    } else {
+                        state.viewport.pan
+                    }
+                    val startX = -((currentPan.x * state.viewport.zoom) % step)
+                    val startY = -((currentPan.y * state.viewport.zoom) % step)
 
                     // Limit grid lines for performance
                     val maxLines = 50
