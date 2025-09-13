@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShowChart
@@ -38,6 +39,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -181,6 +183,9 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                         }
                         IconButton(onClick = { vm.redo() }) { 
                             Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo") 
+                        }
+                        IconButton(onClick = { vm.clear() }) { 
+                            Icon(Icons.Filled.Clear, contentDescription = "Clear Screen") 
                         }
                         IconButton(onClick = {
                             val width = if (canvasSize.width > 0) canvasSize.width else 1080
@@ -761,60 +766,123 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     // Move/Drag tool
-                    CircularIconButton(
-                        onClick = { mode = Mode.Move },
-                        selected = mode == Mode.Move,
-                        icon = Icons.Default.PanTool,
-                        contentDescription = "Move/Drag Tool"
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularIconButton(
+                            onClick = { mode = Mode.Move },
+                            selected = mode == Mode.Move,
+                            icon = Icons.Default.PanTool,
+                            contentDescription = "Move/Drag Tool"
+                        )
+                        Text(
+                            text = "Move",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (mode == Mode.Move) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                        )
+                    }
                     
                     // Pencil tool
-                    CircularIconButton(
-                        onClick = { mode = Mode.Pencil },
-                        selected = mode == Mode.Pencil,
-                        icon = Icons.Default.Edit,
-                        contentDescription = "Pencil Tool"
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularIconButton(
+                            onClick = { mode = Mode.Pencil },
+                            selected = mode == Mode.Pencil,
+                            icon = Icons.Default.Edit,
+                            contentDescription = "Pencil Tool"
+                        )
+                        Text(
+                            text = "Pencil",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (mode == Mode.Pencil) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                        )
+                    }
                     
                     // Line tool
-                    CircularIconButton(
-                        onClick = { mode = Mode.Line },
-                        selected = mode == Mode.Line,
-                        icon = Icons.Default.ShowChart,
-                        contentDescription = "Line Tool"
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularIconButton(
+                            onClick = { mode = Mode.Line },
+                            selected = mode == Mode.Line,
+                            icon = Icons.Default.ShowChart,
+                            contentDescription = "Line Tool"
+                        )
+                        Text(
+                            text = "Line",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (mode == Mode.Line) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                        )
+                    }
                     
                     // Ruler line tool
-                    CircularIconButton(
-                        onClick = { mode = Mode.RulerLine },
-                        selected = mode == Mode.RulerLine,
-                        icon = Icons.Default.Straighten,
-                        contentDescription = "Ruler Line Tool"
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularIconButton(
+                            onClick = { mode = Mode.RulerLine },
+                            selected = mode == Mode.RulerLine,
+                            icon = Icons.Default.Straighten,
+                            contentDescription = "Ruler Line Tool"
+                        )
+                        Text(
+                            text = "Ruler",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (mode == Mode.RulerLine) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                        )
+                    }
                     
                     // Square line tool
-                    CircularIconButton(
-                        onClick = { mode = Mode.SquareLine },
-                        selected = mode == Mode.SquareLine,
-                        icon = Icons.Default.CropSquare,
-                        contentDescription = "Square Line Tool"
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularIconButton(
+                            onClick = { mode = Mode.SquareLine },
+                            selected = mode == Mode.SquareLine,
+                            icon = Icons.Default.CropSquare,
+                            contentDescription = "Square Line Tool"
+                        )
+                        Text(
+                            text = "Square",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (mode == Mode.SquareLine) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                        )
+                    }
                     
                     // Protractor tool
-                    CircularIconButton(
-                        onClick = { mode = Mode.Protractor },
-                        selected = mode == Mode.Protractor,
-                        icon = Icons.Default.Explore,
-                        contentDescription = "Protractor Tool"
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularIconButton(
+                            onClick = { mode = Mode.Protractor },
+                            selected = mode == Mode.Protractor,
+                            icon = Icons.Default.Explore,
+                            contentDescription = "Protractor Tool"
+                        )
+                        Text(
+                            text = "Protractor",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (mode == Mode.Protractor) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                        )
+                    }
                     
                     // Compass tool
-                    CircularIconButton(
-                        onClick = { mode = Mode.Compass },
-                        selected = mode == Mode.Compass,
-                        icon = Icons.Default.RadioButtonUnchecked,
-                        contentDescription = "Compass Tool"
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularIconButton(
+                            onClick = { mode = Mode.Compass },
+                            selected = mode == Mode.Compass,
+                            icon = Icons.Default.RadioButtonUnchecked,
+                            contentDescription = "Compass Tool"
+                        )
+                        Text(
+                            text = "Compass",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (mode == Mode.Compass) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                        )
+                    }
                 }
             }
 
@@ -984,42 +1052,54 @@ fun CircularIconButton(
     contentDescription: String
 ) {
     val backgroundColor = if (selected) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
     } else {
-        Color.Transparent
+        Color.White.copy(alpha = 0.8f)
     }
     
     val iconColor = if (selected) {
         MaterialTheme.colorScheme.primary
     } else {
-        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        Color.Black.copy(alpha = 0.8f)
     }
     
     val borderColor = if (selected) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+        MaterialTheme.colorScheme.primary
     } else {
-        Color.Transparent
+        Color.Black.copy(alpha = 0.3f)
+    }
+    
+    val shadowColor = if (selected) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+    } else {
+        Color.Black.copy(alpha = 0.2f)
     }
     
     IconButton(
         onClick = onClick,
         modifier = Modifier
-            .size(48.dp)
+            .size(52.dp)
             .background(
                 color = backgroundColor,
                 shape = CircleShape
             )
             .border(
-                width = if (selected) 2.dp else 0.dp,
+                width = 2.dp,
                 color = borderColor,
                 shape = CircleShape
+            )
+            .shadow(
+                elevation = 4.dp,
+                shape = CircleShape,
+                ambientColor = shadowColor,
+                spotColor = shadowColor
             )
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = iconColor,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier.size(26.dp)
         )
     }
 }

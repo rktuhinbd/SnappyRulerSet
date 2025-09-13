@@ -33,4 +33,10 @@ class DrawingViewModel : ViewModel() {
             _state.value = history.redo(_state.value)
         }
     }
+
+    fun clear() {
+        val clearedState = _state.value.copy(shapes = emptyList())
+        _state.value = clearedState
+        history.push(clearedState)
+    }
 }
