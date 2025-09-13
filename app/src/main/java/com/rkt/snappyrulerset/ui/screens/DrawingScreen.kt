@@ -38,6 +38,7 @@ import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -46,14 +47,14 @@ import com.rkt.snappyrulerset.model.*
 import com.rkt.snappyrulerset.snapping.*
 import com.rkt.snappyrulerset.performance.PerformanceMonitor
 import com.rkt.snappyrulerset.calibration.CalibrationManager
+import com.rkt.snappyrulerset.ui.theme.SnappyRulerSetTheme
 import java.io.File
 import java.util.Locale
-import kotlin.collections.get
 import kotlin.math.*
 
 // Modes: Hand = pan; Line = free lines (snap to common angles); RulerLine = along ruler edge
 // SquareLine = along nearest set-square edge; Tool = drag/rotate active tool
-private enum class Mode { Hand, Freehand, Line, RulerLine, SquareLine, Protractor, Compass, Tool }
+private enum class Mode { Move, Pencil, Line, RulerLine, SquareLine, Protractor, Compass, Tool }
 
 // Active tool choice
 private enum class ToolKind { Ruler, SetSquare45, SetSquare30_60, Protractor, Compass }
@@ -81,7 +82,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
     }
 
     // Mode / Tool
-    var mode by remember { mutableStateOf(Mode.Hand) }
+    var mode by remember { mutableStateOf(Mode.Move) }
     var activeTool by remember { mutableStateOf(ToolKind.SetSquare45) } // default to triangle to see it immediately
 
     // Tool transform (shared: ruler or set square)
@@ -166,9 +167,9 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                 ) {
                     Row(modifier = Modifier.weight(1f, false).horizontalScroll(rememberScrollState())) {
                         // Modes (scrollable)
-                        FilterChip(onClick = { mode = Mode.Hand }, selected = mode == Mode.Hand, label = { Text("Hand") })
+                        FilterChip(onClick = { mode = Mode.Move }, selected = mode == Mode.Move, label = { Text("Drag") })
                         Spacer(Modifier.width(6.dp))
-                        FilterChip(onClick = { mode = Mode.Freehand }, selected = mode == Mode.Freehand, label = { Text("Freehand") })
+                        FilterChip(onClick = { mode = Mode.Pencil }, selected = mode == Mode.Pencil, label = { Text("Pencil") })
                         Spacer(Modifier.width(6.dp))
                         FilterChip(onClick = { mode = Mode.Line }, selected = mode == Mode.Line, label = { Text("Line") })
                         Spacer(Modifier.width(6.dp))
@@ -259,7 +260,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                             awaitFirstDown(requireUnconsumed = false)
                             var transformMode = false
 
-                            if (mode == Mode.Line || mode == Mode.RulerLine || mode == Mode.SquareLine || mode == Mode.Protractor || mode == Mode.Compass || mode == Mode.Freehand) {
+                            if (mode == Mode.Line || mode == Mode.RulerLine || mode == Mode.SquareLine || mode == Mode.Protractor || mode == Mode.Compass || mode == Mode.Pencil) {
                                 // Long-press = snap temporarily off
                                 snapOff = withTimeoutOrNull(350) {
                                     while (true) {
@@ -321,7 +322,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                                     }
                                 } else {
                                     when (mode) {
-                                        Mode.Hand -> {
+                                        Mode.Move -> {
                                             val panDelta = event.calculatePan()
                                             vm.update { s ->
                                                 s.copy(
@@ -336,7 +337,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                                             changes.forEach { it.consume() }
                                         }
 
-                                        Mode.Line, Mode.RulerLine, Mode.SquareLine, Mode.Protractor, Mode.Compass, Mode.Freehand -> {
+                                        Mode.Line, Mode.RulerLine, Mode.SquareLine, Mode.Protractor, Mode.Compass, Mode.Pencil -> {
                                             val pos = changes.firstOrNull()?.position ?: continue
                                             val world = screenToWorld(pos, state.viewport)
 
@@ -349,7 +350,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                                                     protractorBaseAngle = null
                                                     hud = "Click to set first ray"
                                                 }
-                                                if (mode == Mode.Freehand) {
+                                                if (mode == Mode.Pencil) {
                                                     vm.update { s -> s.copy(shapes = s.shapes + Shape.Path(points = listOf(world))) }
                                                 }
                                             } else {
@@ -381,13 +382,13 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
 
                                                     Mode.Protractor -> fromAngle(0f)
                                                     Mode.Compass -> fromAngle(0f)
-                                                    Mode.Freehand -> fromAngle(0f)
+                                                    Mode.Pencil -> fromAngle(0f)
 
                                                     else -> fromAngle(0f)
                                                 }
 
                                                 var projected = when (mode) {
-                                                    Mode.Compass, Mode.Freehand -> world
+                                                    Mode.Compass, Mode.Pencil -> world
                                                     else -> projectOntoLine(startW, world, dir)
                                                 }
                                                 highlight = null
@@ -483,7 +484,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                                                         }
                                                         endW = projected
                                                     }
-                                                    Mode.Freehand -> {
+                                                    Mode.Pencil -> {
                                                         endW = projected
                                                         vm.update { s ->
                                                             val last = s.shapes.lastOrNull()
@@ -515,7 +516,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                                 }
                             } while (event.changes.any { it.pressed })
 
-                            if ((mode == Mode.Line || mode == Mode.RulerLine || mode == Mode.SquareLine || mode == Mode.Compass || mode == Mode.Protractor || mode == Mode.Freehand) && !transformMode && dragging) {
+                            if ((mode == Mode.Line || mode == Mode.RulerLine || mode == Mode.SquareLine || mode == Mode.Compass || mode == Mode.Protractor || mode == Mode.Pencil) && !transformMode && dragging) {
                                 dragging = false
                                 when (mode) {
                                     Mode.Compass -> {
@@ -534,7 +535,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                                     Mode.Protractor -> {
                                         // measurement only, no shape
                                     }
-                                    Mode.Freehand -> {
+                                    Mode.Pencil -> {
                                         // already added during drag
                                     }
                                     else -> {
@@ -911,4 +912,20 @@ private fun triangleWorldPoints(
     val sa = sin(baseAngle)
     fun rot(p: Vec2) = Vec2(p.x * ca - p.y * sa, p.x * sa + p.y * ca)
     return raw.map { center + rot(it) }
+}
+
+
+@Preview(showBackground = true)
+@Composable
+fun GreetingPreview() {
+    SnappyRulerSetTheme {
+        SnappyRulerSetTheme {
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background
+            ) {
+                DrawingScreen()
+            }
+        }
+    }
 }
