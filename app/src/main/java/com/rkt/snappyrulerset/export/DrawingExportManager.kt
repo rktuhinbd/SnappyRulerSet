@@ -16,6 +16,10 @@ import java.io.File
 import java.io.FileOutputStream
 
 
+/**
+ * Manages exporting and sharing of drawings in various formats.
+ * Provides functionality to create bitmaps, save to gallery, and share drawings.
+ */
 object DrawingExportManager {
     fun createBitmap(state: DrawingState, viewport: Viewport, widthPx: Int, heightPx: Int): Bitmap {
         val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)

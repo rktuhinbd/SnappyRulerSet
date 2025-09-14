@@ -3,6 +3,12 @@ package com.rkt.snappyrulerset.domain.usecase
 import com.rkt.snappyrulerset.domain.entity.Vec2
 import kotlin.math.floor
 
+/**
+ * A spatial grid for efficient point queries.
+ * Divides 2D space into a grid of cells to optimize nearest neighbor searches.
+ * 
+ * @param cell The size of each grid cell in pixels (default: 64f)
+ */
 class SpatialGrid(private val cell: Float = 64f) {
     private val map = HashMap<Long, MutableList<Vec2>>()
 
@@ -12,14 +18,29 @@ class SpatialGrid(private val cell: Float = 64f) {
         return (cx shl 32) xor (cy and 0xffffffffL)
     }
 
+    /**
+     * Clears all points from the grid
+     */
     fun clear() = map.clear()
 
+    /**
+     * Inserts a single point into the grid
+     */
     fun insert(p: Vec2) {
         map.getOrPut(key(p.x, p.y)) { mutableListOf() }.add(p)
     }
 
+    /**
+     * Inserts multiple points into the grid
+     */
     fun insertAll(points: Iterable<Vec2>) { points.forEach { insert(it) } }
 
+    /**
+     * Queries for points near the given position within adjacent grid cells
+     * @param p The center point for the query
+     * @param maxResults Maximum number of results to return
+     * @return List of nearby points
+     */
     fun queryNear(p: Vec2, maxResults: Int = 20): List<Vec2> {
         val cx = floor(p.x / cell).toLong()
         val cy = floor(p.y / cell).toLong()

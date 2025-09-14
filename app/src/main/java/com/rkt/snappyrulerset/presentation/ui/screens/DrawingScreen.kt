@@ -71,6 +71,7 @@ import com.rkt.snappyrulerset.domain.entity.plus
 import com.rkt.snappyrulerset.domain.entity.radians
 import com.rkt.snappyrulerset.domain.entity.times
 import com.rkt.snappyrulerset.domain.usecase.SnapCandidate
+import com.rkt.snappyrulerset.domain.usecase.SnappingEngine
 import com.rkt.snappyrulerset.domain.usecase.SpatialGrid
 import com.rkt.snappyrulerset.domain.usecase.collectArcPoints
 import com.rkt.snappyrulerset.domain.usecase.collectCircleCenters
@@ -101,6 +102,7 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
     val deviceCalibrationManager = remember { DeviceCalibrationManager(context) }
     val calibrationData = remember { deviceCalibrationManager.getCalibrationData() }
     val frameRateMonitor = remember { FrameRateMonitor() }
+    val snappingEngine = remember { SnappingEngine() }
 
     val dpi = calibrationData.dpi
     val gridMm = 5f // 5mm grid spacing
@@ -403,7 +405,7 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
 
                                                 // Enhanced snapping with priority system
                                                 if (state.snapping && !snapOff) {
-                                                    val radiusPx = dynamicSnapRadiusPx(state.viewport.zoom, basePx = 24f)
+                                                    val radiusPx = snappingEngine.dynamicSnapRadiusPx(state.viewport.zoom, basePx = 24f)
                                                     val snapCandidates = mutableListOf<SnapCandidate>()
 
                                                     // 1. Point snaps (highest priority) - more generous for endpoints
@@ -446,7 +448,8 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                                                     }
 
                                                     // 3. Grid snaps (lowest priority)
-                                                    val gridP = snapToGrid(projected, gridMm, dpi)
+                                                    val gridSnap = snappingEngine.snapToGrid(projected, gridMm, dpi, state.viewport.zoom)
+                                                    val gridP = gridSnap.pos
                                                     val gridD = distance(gridP, projected) * state.viewport.zoom
                                                     if (gridD <= radiusPx) {
                                                         snapCandidates.add(
@@ -604,7 +607,7 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                 }
 
                 // Grid - optimized for performance
-                val stepWorld = mmToPx(gridMm, dpi)
+                val stepWorld = snappingEngine.mmToPx(gridMm, dpi)
                 val step = stepWorld * state.viewport.zoom
                 if (step > 8f && step < 200f) { // Only draw grid when visible and not too dense
                     val w = size.width
@@ -1050,15 +1053,7 @@ private fun snapAngleIfClose(rawRad: Float, thresholdDeg: Float): SnapResult {
     return if (delta <= thresholdDeg) SnapResult(bestRad, true) else SnapResult(rawRad, false)
 }
 
-private fun mmToPx(mm: Float, dpi: Float) = (dpi / 25.4f) * mm
-private fun dynamicSnapRadiusPx(zoom: Float, basePx: Float = 16f) =
-    (basePx / zoom).coerceIn(6f, 28f)
-
-private fun snapToGrid(p: Vec2, gridMm: Float, dpi: Float): Vec2 {
-    val s = mmToPx(gridMm, dpi)
-    fun r(v: Float) = round(v / s) * s
-    return Vec2(r(p.x), r(p.y))
-}
+// Helper functions now use SnappingEngine
 
 // ---- Set Square geometry ----
 private fun triangleEdgeDirs(
