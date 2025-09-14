@@ -1,10 +1,10 @@
-package com.rkt.snappyrulerset.snapping
+package com.rkt.snappyrulerset.domain.usecase
 
 import androidx.compose.runtime.Immutable
-import com.rkt.snappyrulerset.model.Vec2
-import com.rkt.snappyrulerset.model.distance
-import com.rkt.snappyrulerset.model.minus
-import com.rkt.snappyrulerset.model.radians
+import com.rkt.snappyrulerset.domain.entity.Vec2
+import com.rkt.snappyrulerset.domain.entity.distance
+import com.rkt.snappyrulerset.domain.entity.minus
+import com.rkt.snappyrulerset.domain.entity.radians
 import kotlin.math.*
 
 
@@ -34,7 +34,7 @@ class SnapEngine {
         val gridPx = mmToPx(gridMm, dpi) * zoom // grid spacing in screen px for clarity
 // We compute in world coords, so use world grid; spacing in world px = mmToPx(...)
         val spacing = mmToPx(gridMm, dpi)
-        fun roundTo(v: Float, s: Float) = (kotlin.math.round(v / s) * s)
+        fun roundTo(v: Float, s: Float) = (round(v / s) * s)
         val gx = roundTo(current.x, spacing)
         val gy = roundTo(current.y, spacing)
         val snapped = Vec2(gx, gy)

@@ -3,8 +3,7 @@ package com.rkt.snappyrulerset.ui
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.rkt.snappyrulerset.ui.screens.DrawingScreen
-import com.rkt.snappyrulerset.viewmodel.DrawingViewModel
+import com.rkt.snappyrulerset.presentation.ui.screens.DrawingScreen
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith

@@ -1,4 +1,4 @@
-package com.rkt.snappyrulerset.model
+package com.rkt.snappyrulerset.domain.entity
 
 import kotlin.math.*
 

@@ -1,4 +1,4 @@
-package com.rkt.snappyrulerset.ui.theme
+package com.rkt.snappyrulerset.presentation.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

@@ -1,6 +1,12 @@
-package com.rkt.snappyrulerset.snapping
+package com.rkt.snappyrulerset.domain.usecase
 
-import com.rkt.snappyrulerset.model.*
+import com.rkt.snappyrulerset.domain.entity.Shape
+import com.rkt.snappyrulerset.domain.entity.Vec2
+import com.rkt.snappyrulerset.domain.entity.distance
+import com.rkt.snappyrulerset.domain.entity.fromAngle
+import com.rkt.snappyrulerset.domain.entity.minus
+import com.rkt.snappyrulerset.domain.entity.plus
+import com.rkt.snappyrulerset.domain.entity.times
 import kotlin.math.abs
 import kotlin.math.sqrt
 

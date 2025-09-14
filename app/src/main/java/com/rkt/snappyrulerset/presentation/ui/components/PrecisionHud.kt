@@ -1,4 +1,4 @@
-package com.rkt.snappyrulerset.ui.components
+package com.rkt.snappyrulerset.presentation.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding

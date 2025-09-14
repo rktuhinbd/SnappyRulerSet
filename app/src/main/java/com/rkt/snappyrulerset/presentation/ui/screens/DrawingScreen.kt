@@ -1,4 +1,4 @@
-package com.rkt.snappyrulerset.ui.screens
+package com.rkt.snappyrulerset.presentation.ui.screens
 
 import android.Manifest
 import android.content.ContentValues
@@ -17,13 +17,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Redo
-import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.Edit
@@ -57,11 +54,34 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.rkt.snappyrulerset.model.*
-import com.rkt.snappyrulerset.snapping.*
-import com.rkt.snappyrulerset.performance.PerformanceMonitor
-import com.rkt.snappyrulerset.calibration.CalibrationManager
-import com.rkt.snappyrulerset.ui.theme.SnappyRulerSetTheme
+import com.rkt.snappyrulerset.data.local.FrameRateMonitor
+import com.rkt.snappyrulerset.data.local.DeviceCalibrationManager
+import com.rkt.snappyrulerset.domain.entity.CompassMode
+import com.rkt.snappyrulerset.domain.entity.DrawingState
+import com.rkt.snappyrulerset.domain.entity.Shape
+import com.rkt.snappyrulerset.domain.entity.Vec2
+import com.rkt.snappyrulerset.domain.entity.Viewport
+import com.rkt.snappyrulerset.domain.entity.closestPointOnSegment
+import com.rkt.snappyrulerset.domain.entity.degrees
+import com.rkt.snappyrulerset.domain.entity.distance
+import com.rkt.snappyrulerset.domain.entity.dot
+import com.rkt.snappyrulerset.domain.entity.minus
+import com.rkt.snappyrulerset.domain.entity.norm
+import com.rkt.snappyrulerset.domain.entity.plus
+import com.rkt.snappyrulerset.domain.entity.radians
+import com.rkt.snappyrulerset.domain.entity.times
+import com.rkt.snappyrulerset.domain.usecase.SnapCandidate
+import com.rkt.snappyrulerset.domain.usecase.SpatialGrid
+import com.rkt.snappyrulerset.domain.usecase.collectArcPoints
+import com.rkt.snappyrulerset.domain.usecase.collectCircleCenters
+import com.rkt.snappyrulerset.domain.usecase.collectCircleIntersections
+import com.rkt.snappyrulerset.domain.usecase.collectCircleLineIntersections
+import com.rkt.snappyrulerset.domain.usecase.collectIntersections
+import com.rkt.snappyrulerset.domain.usecase.collectLinePoints
+import com.rkt.snappyrulerset.export.DrawingExportManager
+import com.rkt.snappyrulerset.presentation.ui.theme.SnappyRulerSetTheme
+import com.rkt.snappyrulerset.presentation.viewmodel.DrawingViewModel
+import kotlinx.coroutines.delay
 import java.io.File
 import java.util.Locale
 import kotlin.math.*
@@ -75,12 +95,12 @@ private enum class ToolKind { Ruler, SetSquare45, SetSquare30_60, Protractor, Co
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewModel()) {
+fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
-    val calibrationManager = remember { CalibrationManager(context) }
-    val calibrationData = remember { calibrationManager.getCalibrationData() }
-    val performanceMonitor = remember { PerformanceMonitor() }
+    val deviceCalibrationManager = remember { DeviceCalibrationManager(context) }
+    val calibrationData = remember { deviceCalibrationManager.getCalibrationData() }
+    val frameRateMonitor = remember { FrameRateMonitor() }
 
     val dpi = calibrationData.dpi
     val gridMm = 5f // 5mm grid spacing
@@ -90,8 +110,8 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
     // Performance monitoring
     LaunchedEffect(Unit) {
         while (true) {
-            performanceMonitor.startFrame()
-            kotlinx.coroutines.delay(16) // ~60 FPS
+            frameRateMonitor.startFrame()
+            delay(16) // ~60 FPS
         }
     }
 
@@ -105,7 +125,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
     // Apply smooth pan changes to viewport with debouncing
     LaunchedEffect(smoothPan) {
         if (smoothPan != Vec2(0f, 0f)) {
-            kotlinx.coroutines.delay(16) // Debounce to ~60fps
+            delay(16) // Debounce to ~60fps
             vm.update { s ->
                 s.copy(
                     viewport = s.viewport.copy(
@@ -174,13 +194,13 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
     val arcs = remember(state.shapes) { state.shapes.filterIsInstance<Shape.Arc>() }
     val pointIndex = remember(lines, circles, arcs) {
         // Finer cell size improves endpoint search accuracy
-        SpatialIndex(32f).apply {
+        SpatialGrid(32f).apply {
             val pts = collectLinePoints(lines) +
-                     collectIntersections(lines) +
-                     collectCircleCenters(circles) +
-                     collectArcPoints(arcs) +
-                     collectCircleLineIntersections(circles, lines) +
-                     collectCircleIntersections(circles)
+                    collectIntersections(lines) +
+                    collectCircleCenters(circles) +
+                    collectArcPoints(arcs) +
+                    collectCircleLineIntersections(circles, lines) +
+                    collectCircleIntersections(circles)
             insertAll(pts)
         }
     }
@@ -208,7 +228,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                         IconButton(onClick = {
                             val width = if (canvasSize.width > 0) canvasSize.width else 1080
                             val height = if (canvasSize.height > 0) canvasSize.height else 1920
-                            val shareIntent = com.rkt.snappyrulerset.export.Exporter.createShareIntentPng(context, state, state.viewport, width, height)
+                            val shareIntent = DrawingExportManager.createShareIntentPng(context, state, state.viewport, width, height)
                             context.startActivity(Intent.createChooser(shareIntent, "Share Drawing"))
                         }) { 
                             Icon(Icons.Filled.Share, contentDescription = "Share") 
@@ -392,17 +412,35 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                                                         val d = distance(point, projected) * state.viewport.zoom
                                                         val effectiveRadius = if (lastSnap == "point") radiusPx * 1.5f else radiusPx
                                                         if (d <= effectiveRadius) {
-                                                            snapCandidates.add(SnapCandidate(point, 1, d, "point"))
+                                                            snapCandidates.add(
+                                                                SnapCandidate(
+                                                                    point,
+                                                                    1,
+                                                                    d,
+                                                                    "point"
+                                                                )
+                                                            )
                                                         }
                                                     }
 
                                                     // 2. Segment snaps (medium priority)
                                                     if (mode != Mode.Compass) {
                                                         lines.forEach { seg ->
-                                                            val cp = closestPointOnSegment(projected, seg.a, seg.b)
+                                                            val cp = closestPointOnSegment(
+                                                                projected,
+                                                                seg.a,
+                                                                seg.b
+                                                            )
                                                             val d = distance(projected, cp) * state.viewport.zoom
                                                             if (d <= radiusPx) {
-                                                                snapCandidates.add(SnapCandidate(cp, 2, d, "segment"))
+                                                                snapCandidates.add(
+                                                                    SnapCandidate(
+                                                                        cp,
+                                                                        2,
+                                                                        d,
+                                                                        "segment"
+                                                                    )
+                                                                )
                                                             }
                                                         }
                                                     }
@@ -411,7 +449,14 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                                                     val gridP = snapToGrid(projected, gridMm, dpi)
                                                     val gridD = distance(gridP, projected) * state.viewport.zoom
                                                     if (gridD <= radiusPx) {
-                                                        snapCandidates.add(SnapCandidate(gridP, 3, gridD, "grid"))
+                                                        snapCandidates.add(
+                                                            SnapCandidate(
+                                                                gridP,
+                                                                3,
+                                                                gridD,
+                                                                "grid"
+                                                            )
+                                                        )
                                                     }
 
                                                     // Pick best candidate (closest with highest priority)
@@ -441,7 +486,9 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
 
                                                             // snap readout to 0.5° accuracy and hard snap to common angles
                                                             val snappedHard = snapAngleIfClose(cur, 2f) // tighter threshold
-                                                            val shown = if (snappedHard.snapped) degrees(snappedHard.value - base).absoluteValue else delta
+                                                            val shown = if (snappedHard.snapped) degrees(
+                                                                snappedHard.value - base
+                                                            ).absoluteValue else delta
                                                             if (snappedHard.snapped && lastSnap != "angleHard") {
                                                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); lastSnap = "angleHard"
                                                             }
@@ -714,7 +761,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                             sweepAngle = degrees(sweepAngle),
                             useCenter = false,
                             topLeft = center - Offset(radius, radius),
-                            size = androidx.compose.ui.geometry.Size(radius * 2, radius * 2),
+                            size = Size(radius * 2, radius * 2),
                             style = Stroke(width = 2f)
                         )
                         // draw radius lines
@@ -924,7 +971,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
                             style = MaterialTheme.typography.bodySmall
                         )
                         Text(
-                            "FPS: ${String.format("%.1f", performanceMonitor.getCurrentFps())}",
+                            "FPS: ${String.format("%.1f", frameRateMonitor.getCurrentFps())}",
                             color = Color(0xFFCCCCCC),
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -937,7 +984,7 @@ fun DrawingScreen(vm: com.rkt.snappyrulerset.viewmodel.DrawingViewModel = viewMo
 
 /* ---------------- helpers ---------------- */
 
-private fun saveToGallery(ctx: Context, state: com.rkt.snappyrulerset.model.DrawingState, width: Int, height: Int) {
+private fun saveToGallery(ctx: Context, state: DrawingState, width: Int, height: Int) {
     try {
         // Save to gallery using MediaStore (Android 10+)
         val contentResolver = ctx.contentResolver
@@ -950,20 +997,20 @@ private fun saveToGallery(ctx: Context, state: com.rkt.snappyrulerset.model.Draw
         val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
         uri?.let { imageUri ->
             contentResolver.openOutputStream(imageUri)?.use { outputStream ->
-                val bitmap = com.rkt.snappyrulerset.export.Exporter.createBitmap(state, state.viewport, width, height)
+                val bitmap = DrawingExportManager.createBitmap(state, state.viewport, width, height)
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
                 Toast.makeText(ctx, "Saved to Gallery", Toast.LENGTH_SHORT).show()
             }
         } ?: run {
             // Fallback to cache directory if MediaStore fails
             val file = File(ctx.cacheDir, "snappy_export.png")
-            com.rkt.snappyrulerset.export.Exporter.exportPng(state, state.viewport, width, height, file)
+            DrawingExportManager.exportPng(state, state.viewport, width, height, file)
             Toast.makeText(ctx, "Saved to ${file.absolutePath}", Toast.LENGTH_SHORT).show()
         }
     } catch (e: Exception) {
         // Fallback to cache directory if any error occurs
         val file = File(ctx.cacheDir, "snappy_export.png")
-        com.rkt.snappyrulerset.export.Exporter.exportPng(state, state.viewport, width, height, file)
+        DrawingExportManager.exportPng(state, state.viewport, width, height, file)
         Toast.makeText(ctx, "Saved to ${file.absolutePath}", Toast.LENGTH_SHORT).show()
     }
 }

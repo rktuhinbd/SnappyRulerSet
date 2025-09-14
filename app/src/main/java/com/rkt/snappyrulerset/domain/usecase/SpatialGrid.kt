@@ -1,9 +1,9 @@
-package com.rkt.snappyrulerset.snapping
+package com.rkt.snappyrulerset.domain.usecase
 
-import com.rkt.snappyrulerset.model.Vec2
+import com.rkt.snappyrulerset.domain.entity.Vec2
 import kotlin.math.floor
 
-class SpatialIndex(private val cell: Float = 64f) {
+class SpatialGrid(private val cell: Float = 64f) {
     private val map = HashMap<Long, MutableList<Vec2>>()
 
     private fun key(x: Float, y: Float): Long {

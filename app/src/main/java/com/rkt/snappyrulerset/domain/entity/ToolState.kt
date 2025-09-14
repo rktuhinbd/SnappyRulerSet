@@ -1,4 +1,4 @@
-package com.rkt.snappyrulerset.model
+package com.rkt.snappyrulerset.domain.entity
 
 enum class ToolKind { Ruler, SetSquare45, SetSquare3060, Protractor, Compass }
 

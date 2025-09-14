@@ -1,9 +1,6 @@
-package com.rkt.snappyrulerset.history
+package com.rkt.snappyrulerset.domain.entity
 
-import com.rkt.snappyrulerset.model.DrawingState
-
-
-class History(private val max: Int = 50) {
+class UndoRedoManager(private val max: Int = 50) {
     private val past = ArrayDeque<DrawingState>()
     private val future = ArrayDeque<DrawingState>()
 

@@ -9,8 +9,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.rkt.snappyrulerset.ui.screens.DrawingScreen
-import com.rkt.snappyrulerset.ui.theme.SnappyRulerSetTheme
+import com.rkt.snappyrulerset.presentation.ui.screens.DrawingScreen
+import com.rkt.snappyrulerset.presentation.ui.theme.SnappyRulerSetTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

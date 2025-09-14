@@ -1,4 +1,4 @@
-package com.rkt.snappyrulerset.model
+package com.rkt.snappyrulerset.domain.entity
 
 sealed class Shape {
     data class Line(val a: Vec2, val b: Vec2): Shape()

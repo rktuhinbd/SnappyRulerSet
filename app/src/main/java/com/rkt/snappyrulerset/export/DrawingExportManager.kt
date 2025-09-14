@@ -7,16 +7,16 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import androidx.core.content.FileProvider
-import com.rkt.snappyrulerset.model.DrawingState
-import com.rkt.snappyrulerset.model.Shape
-import com.rkt.snappyrulerset.model.Vec2
-import com.rkt.snappyrulerset.model.Viewport
+import com.rkt.snappyrulerset.domain.entity.DrawingState
+import com.rkt.snappyrulerset.domain.entity.Shape
+import com.rkt.snappyrulerset.domain.entity.Vec2
+import com.rkt.snappyrulerset.domain.entity.Viewport
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 
 
-object Exporter {
+object DrawingExportManager {
     fun createBitmap(state: DrawingState, viewport: Viewport, widthPx: Int, heightPx: Int): Bitmap {
         val bmp = Bitmap.createBitmap(widthPx, heightPx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
