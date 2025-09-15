@@ -102,7 +102,7 @@ A professional-grade precision drawing application for Android that provides vir
 ### Option 2: Build from Source
 `ash
 # Clone the repository
-git clone https://github.com/yourusername/SnappyRuler.git
+git clone https://github.com/rktuhinbd/SnappyRulerSet.git
 cd SnappyRuler
 
 # Build the project
