@@ -182,9 +182,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ##  Support
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/SnappyRuler/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/SnappyRuler/discussions)
-- **Email**: support@snappyruler.com
+- **Issues**: [GitHub Issues](https://github.com/rktuhinbd/SnappyRuler/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/rktuhinbd/SnappyRuler/discussions)
+- **Email**: rktuhinbd@gmail.com
 
 ---
 
