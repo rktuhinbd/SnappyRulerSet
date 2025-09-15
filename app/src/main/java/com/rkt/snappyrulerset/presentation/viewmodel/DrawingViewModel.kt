@@ -1,6 +1,8 @@
 package com.rkt.snappyrulerset.presentation.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
+import com.rkt.snappyrulerset.data.local.SettingsManager
 import com.rkt.snappyrulerset.domain.entity.DrawingState
 import com.rkt.snappyrulerset.domain.entity.UndoRedoManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,10 +12,13 @@ import kotlinx.coroutines.flow.StateFlow
  * ViewModel for the drawing screen that manages the drawing state and provides
  * operations for updating, undoing, redoing, and clearing the drawing.
  */
-class DrawingViewModel : ViewModel() {
+class DrawingViewModel(private val context: Context? = null) : ViewModel() {
     private val undoRedoManager = UndoRedoManager(max = 50)
+    private val settingsManager = context?.let { SettingsManager(it) }
 
-    private val _state = MutableStateFlow(DrawingState())
+    private val _state = MutableStateFlow(
+        settingsManager?.loadSettings() ?: DrawingState()
+    )
     val state: StateFlow<DrawingState> = _state
 
     init {
@@ -24,9 +29,31 @@ class DrawingViewModel : ViewModel() {
      * Updates the drawing state using the provided transformation function
      */
     fun update(block: (DrawingState) -> DrawingState) {
-        val s = block(_state.value)
-        _state.value = s
-        undoRedoManager.push(s)
+        val oldState = _state.value
+        val newState = block(oldState)
+        _state.value = newState
+        undoRedoManager.push(newState)
+        
+        // Save settings to SharedPreferences if they changed
+        settingsManager?.let { manager ->
+            if (hasSettingsChanged(oldState, newState)) {
+                manager.saveSettings(newState)
+            }
+        }
+    }
+    
+    /**
+     * Check if any settings have changed
+     */
+    private fun hasSettingsChanged(oldState: DrawingState, newState: DrawingState): Boolean {
+        return oldState.theme != newState.theme ||
+               oldState.gridSpacingMm != newState.gridSpacingMm ||
+               oldState.snapRadiusPx != newState.snapRadiusPx ||
+               oldState.snapping != newState.snapping ||
+               oldState.hapticFeedback != newState.hapticFeedback ||
+               oldState.showGrid != newState.showGrid ||
+               oldState.showSnapIndicators != newState.showSnapIndicators ||
+               oldState.showMeasurements != newState.showMeasurements
     }
 
     /**

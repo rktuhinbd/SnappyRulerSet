@@ -54,5 +54,10 @@ data class DrawingState(
     val viewport: Viewport = Viewport(),
     val snapping: Boolean = true,
     val gridSpacingMm: Float = 5f, // Configurable grid spacing
-    val snapRadiusPx: Float = 16f // Base snap radius
+    val snapRadiusPx: Float = 16f, // Base snap radius
+    val hapticFeedback: Boolean = true, // Haptic feedback on interactions
+    val showGrid: Boolean = true, // Show grid lines
+    val showSnapIndicators: Boolean = true, // Show snap point indicators
+    val showMeasurements: Boolean = true, // Show measurement labels
+    val theme: String = "light" // Current theme (light/dark)
 )

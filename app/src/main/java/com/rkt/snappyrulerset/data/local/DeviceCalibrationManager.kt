@@ -64,7 +64,7 @@ class DeviceCalibrationManager(private val context: Context) {
         return STANDARD_DPIS.values.minByOrNull { abs(it - density) } ?: density
     }
 
-    private fun saveCalibration(data: CalibrationData) {
+    fun saveCalibration(data: CalibrationData) {
         prefs.edit()
             .putFloat(KEY_DPI, data.dpi)
             .putFloat(KEY_MM_PER_PX, data.mmPerPx)

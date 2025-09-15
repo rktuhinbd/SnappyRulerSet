@@ -15,25 +15,59 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateRotation
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShowChart
 import androidx.compose.material.icons.filled.Straighten
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -47,6 +81,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.tooling.preview.Preview
@@ -54,8 +89,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.rkt.snappyrulerset.data.local.FrameRateMonitor
 import com.rkt.snappyrulerset.data.local.DeviceCalibrationManager
+import com.rkt.snappyrulerset.data.local.FrameRateMonitor
 import com.rkt.snappyrulerset.domain.entity.CompassMode
 import com.rkt.snappyrulerset.domain.entity.DrawingState
 import com.rkt.snappyrulerset.domain.entity.Shape
@@ -80,12 +115,23 @@ import com.rkt.snappyrulerset.domain.usecase.collectCircleLineIntersections
 import com.rkt.snappyrulerset.domain.usecase.collectIntersections
 import com.rkt.snappyrulerset.domain.usecase.collectLinePoints
 import com.rkt.snappyrulerset.export.DrawingExportManager
+import com.rkt.snappyrulerset.presentation.ui.components.CompactPrecisionDisplay
+import com.rkt.snappyrulerset.presentation.ui.components.EnhancedGridVisualization
+import com.rkt.snappyrulerset.presentation.ui.components.HapticFeedbackManager
+import com.rkt.snappyrulerset.presentation.ui.components.SnapType
 import com.rkt.snappyrulerset.presentation.ui.theme.SnappyRulerSetTheme
 import com.rkt.snappyrulerset.presentation.viewmodel.DrawingViewModel
 import kotlinx.coroutines.delay
 import java.io.File
 import java.util.Locale
-import kotlin.math.*
+import kotlin.math.abs
+import kotlin.math.absoluteValue
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.min
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 // Modes: Hand = pan; Line = free lines (snap to common angles); RulerLine = along ruler edge
 // SquareLine = along nearest set-square edge; Tool = drag/rotate active tool
@@ -96,7 +142,11 @@ private enum class ToolKind { Ruler, SetSquare45, SetSquare30_60, Protractor, Co
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
+fun DrawingScreen(
+    vm: DrawingViewModel = viewModel(),
+    onNavigateToCalibration: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {}
+) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
     val deviceCalibrationManager = remember { DeviceCalibrationManager(context) }
@@ -105,9 +155,15 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
     val snappingEngine = remember { SnappingEngine() }
 
     val dpi = calibrationData.dpi
-    val gridMm = 5f // 5mm grid spacing
+    val gridMm = state.gridSpacingMm // Use state grid spacing
     val mmPerPx = calibrationData.mmPerPx
     val haptic = LocalHapticFeedback.current
+    val hapticManager = remember { HapticFeedbackManager() }
+
+    // Orientation detection for responsive design
+    val configuration = LocalConfiguration.current
+    val isLandscape =
+        configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     // Performance monitoring
     LaunchedEffect(Unit) {
@@ -120,10 +176,16 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
     // Mode / Tool
     var mode by remember { mutableStateOf(Mode.Move) }
     var activeTool by remember { mutableStateOf(ToolKind.SetSquare45) } // default to triangle to see it immediately
-    
+
+    // Variables for enhanced components
+    var currentPos by remember { mutableStateOf(Vec2(0f, 0f)) }
+    var lastPos by remember { mutableStateOf(Vec2(0f, 0f)) }
+    var currentAngle by remember { mutableStateOf(0f) }
+    var currentRadius by remember { mutableStateOf(0f) }
+
     // Smooth pan state for better performance
     var smoothPan by remember { mutableStateOf(Vec2(0f, 0f)) }
-    
+
     // Apply smooth pan changes to viewport with debouncing
     LaunchedEffect(smoothPan) {
         if (smoothPan != Vec2(0f, 0f)) {
@@ -213,27 +275,71 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
         },
         bottomBar = {
             BottomAppBar(
+                modifier = Modifier
+                    .height(if (isLandscape) 48.dp else 64.dp)
+                    .windowInsetsPadding(WindowInsets.navigationBars),
                 actions = {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        IconButton(onClick = { vm.undo() }) { 
-                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo") 
+                        IconButton(onClick = {
+                            vm.undo()
+                            if (state.hapticFeedback) {
+                                hapticManager.triggerButtonPressFeedback(
+                                    haptic,
+                                    state.hapticFeedback
+                                )
+                            }
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo")
                         }
-                        IconButton(onClick = { vm.redo() }) { 
-                            Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo") 
+                        IconButton(onClick = {
+                            vm.redo()
+                            if (state.hapticFeedback) {
+                                hapticManager.triggerButtonPressFeedback(
+                                    haptic,
+                                    state.hapticFeedback
+                                )
+                            }
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo")
                         }
-                        IconButton(onClick = { vm.clear() }) { 
-                            Icon(Icons.Filled.Clear, contentDescription = "Clear Screen") 
+                        IconButton(onClick = {
+                            vm.clear()
+                            if (state.hapticFeedback) {
+                                hapticManager.triggerButtonPressFeedback(
+                                    haptic,
+                                    state.hapticFeedback
+                                )
+                            }
+                        }) {
+                            Icon(Icons.Filled.Clear, contentDescription = "Clear Screen")
                         }
                         IconButton(onClick = {
                             val width = if (canvasSize.width > 0) canvasSize.width else 1080
                             val height = if (canvasSize.height > 0) canvasSize.height else 1920
-                            val shareIntent = DrawingExportManager.createShareIntentPng(context, state, state.viewport, width, height)
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Drawing"))
-                        }) { 
-                            Icon(Icons.Filled.Share, contentDescription = "Share") 
+                            val shareIntent = DrawingExportManager.createShareIntentPng(
+                                context,
+                                state,
+                                state.viewport,
+                                width,
+                                height
+                            )
+                            context.startActivity(
+                                Intent.createChooser(
+                                    shareIntent,
+                                    "Share Drawing"
+                                )
+                            )
+                            if (state.hapticFeedback) {
+                                hapticManager.triggerButtonPressFeedback(
+                                    haptic,
+                                    state.hapticFeedback
+                                )
+                            }
+                        }) {
+                            Icon(Icons.Filled.Share, contentDescription = "Share")
                         }
                         IconButton(onClick = {
                             val width = if (canvasSize.width > 0) canvasSize.width else 1080
@@ -242,24 +348,47 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                             // Check and request permissions for Android 13+
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                 val permission = Manifest.permission.READ_MEDIA_IMAGES
-                                if (ContextCompat.checkSelfPermission(ctx, permission) != PackageManager.PERMISSION_GRANTED) {
+                                if (ContextCompat.checkSelfPermission(
+                                        ctx,
+                                        permission
+                                    ) != PackageManager.PERMISSION_GRANTED
+                                ) {
                                     permissionLauncher.launch(permission)
                                     return@IconButton
                                 }
                             }
 
                             saveToGallery(ctx, state, width, height)
-                        }) { 
-                            Icon(Icons.Filled.Save, contentDescription = "Save") 
+                            if (state.hapticFeedback) {
+                                hapticManager.triggerButtonPressFeedback(
+                                    haptic,
+                                    state.hapticFeedback
+                                )
+                            }
+                        }) {
+                            Icon(Icons.Filled.Save, contentDescription = "Save")
+                        }
+                        IconButton(onClick = {
+                            onNavigateToSettings()
+                            if (state.hapticFeedback) {
+                                hapticManager.triggerButtonPressFeedback(
+                                    haptic,
+                                    state.hapticFeedback
+                                )
+                            }
+                        }) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Settings")
                         }
                     }
                 }
             )
         }
     ) { pad ->
-        Box(Modifier
-            .fillMaxSize()
-            .padding(pad)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(pad)
+        ) {
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
@@ -343,7 +472,10 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                                         Mode.Move -> {
                                             val panDelta = event.calculatePan()
                                             // Use smooth pan for better performance
-                                            smoothPan += Vec2(panDelta.x, panDelta.y) * (1f / state.viewport.zoom)
+                                            smoothPan += Vec2(
+                                                panDelta.x,
+                                                panDelta.y
+                                            ) * (1f / state.viewport.zoom)
                                             changes.forEach { it.consume() }
                                         }
 
@@ -361,7 +493,13 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                                                     hud = "Click to set first ray"
                                                 }
                                                 if (mode == Mode.Pencil) {
-                                                    vm.update { s -> s.copy(shapes = s.shapes + Shape.Path(points = listOf(world))) }
+                                                    vm.update { s ->
+                                                        s.copy(
+                                                            shapes = s.shapes + Shape.Path(
+                                                                points = listOf(world)
+                                                            )
+                                                        )
+                                                    }
                                                 }
                                             } else {
                                                 // pick direction
@@ -405,14 +543,23 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
 
                                                 // Enhanced snapping with priority system
                                                 if (state.snapping && !snapOff) {
-                                                    val radiusPx = snappingEngine.dynamicSnapRadiusPx(state.viewport.zoom, basePx = 24f)
-                                                    val snapCandidates = mutableListOf<SnapCandidate>()
+                                                    val radiusPx =
+                                                        snappingEngine.dynamicSnapRadiusPx(
+                                                            state.viewport.zoom,
+                                                            basePx = state.snapRadiusPx
+                                                        )
+                                                    val snapCandidates =
+                                                        mutableListOf<SnapCandidate>()
 
                                                     // 1. Point snaps (highest priority) - more generous for endpoints
                                                     val near = pointIndex.queryNear(projected)
                                                     near.forEach { point ->
-                                                        val d = distance(point, projected) * state.viewport.zoom
-                                                        val effectiveRadius = if (lastSnap == "point") radiusPx * 1.5f else radiusPx
+                                                        val d = distance(
+                                                            point,
+                                                            projected
+                                                        ) * state.viewport.zoom
+                                                        val effectiveRadius =
+                                                            if (lastSnap == "point") radiusPx * 1.5f else radiusPx
                                                         if (d <= effectiveRadius) {
                                                             snapCandidates.add(
                                                                 SnapCandidate(
@@ -433,7 +580,10 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                                                                 seg.a,
                                                                 seg.b
                                                             )
-                                                            val d = distance(projected, cp) * state.viewport.zoom
+                                                            val d = distance(
+                                                                projected,
+                                                                cp
+                                                            ) * state.viewport.zoom
                                                             if (d <= radiusPx) {
                                                                 snapCandidates.add(
                                                                     SnapCandidate(
@@ -448,9 +598,17 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                                                     }
 
                                                     // 3. Grid snaps (lowest priority)
-                                                    val gridSnap = snappingEngine.snapToGrid(projected, gridMm, dpi, state.viewport.zoom)
+                                                    val gridSnap = snappingEngine.snapToGrid(
+                                                        projected,
+                                                        gridMm,
+                                                        dpi,
+                                                        state.viewport.zoom
+                                                    )
                                                     val gridP = gridSnap.pos
-                                                    val gridD = distance(gridP, projected) * state.viewport.zoom
+                                                    val gridD = distance(
+                                                        gridP,
+                                                        projected
+                                                    ) * state.viewport.zoom
                                                     if (gridD <= radiusPx) {
                                                         snapCandidates.add(
                                                             SnapCandidate(
@@ -463,12 +621,18 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                                                     }
 
                                                     // Pick best candidate (closest with highest priority)
-                                                    val best = snapCandidates.minByOrNull { it.priority * 1000f + it.distancePx }
+                                                    val best =
+                                                        snapCandidates.minByOrNull { it.priority * 1000f + it.distancePx }
                                                     if (best != null) {
                                                         projected = best.pos
                                                         highlight = best.pos
                                                         if (lastSnap != best.label) {
-                                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                            if (state.hapticFeedback) {
+                                                                hapticManager.triggerSnapFeedback(
+                                                                    haptic,
+                                                                    state.hapticFeedback
+                                                                )
+                                                            }
                                                             lastSnap = best.label
                                                         }
                                                     }
@@ -478,29 +642,51 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                                                     Mode.Protractor -> {
                                                         // First click sets base angle, second click measures from base
                                                         if (protractorBaseAngle == null) {
-                                                            protractorBaseAngle = atan2((projected - toolPos).y, (projected - toolPos).x)
+                                                            protractorBaseAngle = atan2(
+                                                                (projected - toolPos).y,
+                                                                (projected - toolPos).x
+                                                            )
                                                             hud = "Set first ray"
                                                         } else {
                                                             val base = protractorBaseAngle!!
-                                                            val cur = atan2((projected - toolPos).y, (projected - toolPos).x)
+                                                            val cur = atan2(
+                                                                (projected - toolPos).y,
+                                                                (projected - toolPos).x
+                                                            )
                                                             var delta = degrees(cur - base)
                                                             while (delta < 0f) delta += 360f
                                                             if (delta > 180f) delta = 360f - delta
 
                                                             // snap readout to 0.5° accuracy and hard snap to common angles
-                                                            val snappedHard = snapAngleIfClose(cur, 2f) // tighter threshold
-                                                            val shown = if (snappedHard.snapped) degrees(
-                                                                snappedHard.value - base
-                                                            ).absoluteValue else delta
+                                                            val snappedHard = snapAngleIfClose(
+                                                                cur,
+                                                                2f
+                                                            ) // tighter threshold
+                                                            val shown =
+                                                                if (snappedHard.snapped) degrees(
+                                                                    snappedHard.value - base
+                                                                ).absoluteValue else delta
                                                             if (snappedHard.snapped && lastSnap != "angleHard") {
-                                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); lastSnap = "angleHard"
+                                                                if (state.hapticFeedback) {
+                                                                    hapticManager.triggerSnapFeedback(
+                                                                        haptic,
+                                                                        state.hapticFeedback
+                                                                    )
+                                                                }
+                                                                lastSnap = "angleHard"
                                                             }
                                                             // Round to nearest 0.5° for display
-                                                            val rounded = (shown * 2f).roundToInt() / 2f
-                                                            hud = String.format(Locale.US,"%.1f°", rounded)
+                                                            val rounded =
+                                                                (shown * 2f).roundToInt() / 2f
+                                                            hud = String.format(
+                                                                Locale.US,
+                                                                "%.1f°",
+                                                                rounded
+                                                            )
                                                         }
                                                         endW = projected
                                                     }
+
                                                     Mode.Compass -> {
                                                         val r = distance(startW, projected)
                                                         compassRadius = r
@@ -509,32 +695,56 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
 
                                                         if (compassMode == CompassMode.Arc) {
                                                             if (arcStartAngle == null) {
-                                                                arcStartAngle = atan2((projected - startW).y, (projected - startW).x)
+                                                                arcStartAngle = atan2(
+                                                                    (projected - startW).y,
+                                                                    (projected - startW).x
+                                                                )
                                                                 hud = "Set arc start angle"
                                                             } else {
-                                                                arcEndAngle = atan2((projected - startW).y, (projected - startW).x)
-                                                                val sweep = arcEndAngle!! - arcStartAngle!!
+                                                                arcEndAngle = atan2(
+                                                                    (projected - startW).y,
+                                                                    (projected - startW).x
+                                                                )
+                                                                val sweep =
+                                                                    arcEndAngle!! - arcStartAngle!!
                                                                 val sweepDeg = degrees(sweep)
-                                                                hud = String.format(Locale.US, "r=%.1f cm | %.1f° arc", cm, sweepDeg)
+                                                                hud = String.format(
+                                                                    Locale.US,
+                                                                    "r=%.1f cm | %.1f° arc",
+                                                                    cm,
+                                                                    sweepDeg
+                                                                )
                                                             }
                                                         } else {
-                                                            hud = String.format(Locale.US, "r=%.1f cm (%.1f mm)", cm, mm)
+                                                            hud = String.format(
+                                                                Locale.US,
+                                                                "r=%.1f cm (%.1f mm)",
+                                                                cm,
+                                                                mm
+                                                            )
                                                         }
                                                         endW = projected
                                                     }
+
                                                     Mode.Pencil -> {
                                                         endW = projected
                                                         vm.update { s ->
                                                             val last = s.shapes.lastOrNull()
                                                             if (last is Shape.Path) {
                                                                 val newPts = last.points + projected
-                                                                s.copy(shapes = s.shapes.dropLast(1) + last.copy(points = newPts))
+                                                                s.copy(
+                                                                    shapes = s.shapes.dropLast(1) + last.copy(
+                                                                        points = newPts
+                                                                    )
+                                                                )
                                                             } else s
                                                         }
                                                     }
+
                                                     else -> {
                                                         endW = projected
-                                                        val mm = distance(startW, projected) * mmPerPx
+                                                        val mm =
+                                                            distance(startW, projected) * mmPerPx
                                                         val cm = mm / 10f
                                                         val deg = degrees(
                                                             atan2(
@@ -542,7 +752,13 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                                                                 dir.x
                                                             )
                                                         ).let { if (it < 0) it + 360f else it }
-                                                        hud = String.format(Locale.US,"%.1f cm (%.1f mm) | %.1f°", cm, mm, deg)
+                                                        hud = String.format(
+                                                            Locale.US,
+                                                            "%.1f cm (%.1f mm) | %.1f°",
+                                                            cm,
+                                                            mm,
+                                                            deg
+                                                        )
                                                     }
                                                 }
                                             }
@@ -562,20 +778,39 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                                             val r = distance(startW, e)
                                             if (compassMode == CompassMode.Arc && arcStartAngle != null && arcEndAngle != null) {
                                                 val sweep = arcEndAngle!! - arcStartAngle!!
-                                                vm.update { s -> s.copy(shapes = s.shapes + Shape.Arc(startW, r, arcStartAngle!!, sweep)) }
+                                                vm.update { s ->
+                                                    s.copy(
+                                                        shapes = s.shapes + Shape.Arc(
+                                                            startW,
+                                                            r,
+                                                            arcStartAngle!!,
+                                                            sweep
+                                                        )
+                                                    )
+                                                }
                                                 arcStartAngle = null
                                                 arcEndAngle = null
                                             } else {
-                                                vm.update { s -> s.copy(shapes = s.shapes + Shape.Circle(startW, r)) }
+                                                vm.update { s ->
+                                                    s.copy(
+                                                        shapes = s.shapes + Shape.Circle(
+                                                            startW,
+                                                            r
+                                                        )
+                                                    )
+                                                }
                                             }
                                         }
                                     }
+
                                     Mode.Protractor -> {
                                         // measurement only, no shape
                                     }
+
                                     Mode.Pencil -> {
                                         // already added during drag
                                     }
+
                                     else -> {
                                         endW?.let { e ->
                                             vm.update { s ->
@@ -648,6 +883,7 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                             val radius = s.r * state.viewport.zoom
                             drawCircle(Color.Black, radius, center, style = Stroke(width = 3f))
                         }
+
                         is Shape.Arc -> {
                             val center = w2s(s.center)
                             val radius = s.r * state.viewport.zoom
@@ -661,12 +897,14 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                                 style = Stroke(width = 3f)
                             )
                         }
+
                         is Shape.Path -> {
                             val pts = s.points.map { w2s(it) }
                             for (i in 1 until pts.size) {
-                                drawLine(Color.Black, pts[i-1], pts[i], 3f)
+                                drawLine(Color.Black, pts[i - 1], pts[i], 3f)
                             }
                         }
+
                         else -> {}
                     }
                 }
@@ -709,7 +947,12 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                         // base line showing zero angle
                         val dir = fromAngle(toolAngleRad)
                         drawCircle(Color(0x803498DB), r, center, style = Stroke(width = 2f))
-                        drawLine(Color(0xFF1E88E5), center, center + Offset(dir.x * r, dir.y * r), 3f)
+                        drawLine(
+                            Color(0xFF1E88E5),
+                            center,
+                            center + Offset(dir.x * r, dir.y * r),
+                            3f
+                        )
                         // small tick when snapping angle (visual hint)
                         if (lastSnap == "angleHard" && endW != null) {
                             val p = w2s(endW!!)
@@ -739,7 +982,10 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
 
                     // Draw base ray (first click)
                     if (protractorBaseAngle != null) {
-                        val b1 = a + Offset(cos(protractorBaseAngle!!) * r, sin(protractorBaseAngle!!) * r)
+                        val b1 = a + Offset(
+                            cos(protractorBaseAngle!!) * r,
+                            sin(protractorBaseAngle!!) * r
+                        )
                         drawLine(Color(0xFF1E88E5), a, b1, 4f)
                     }
 
@@ -770,8 +1016,18 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                         // draw radius lines
                         val startDir = fromAngle(startAngle)
                         val endDir = fromAngle(endAngle)
-                        drawLine(Color(0xFF388E3C), center, center + Offset(startDir.x * radius, startDir.y * radius), 3f)
-                        drawLine(Color(0xFF388E3C), center, center + Offset(endDir.x * radius, endDir.y * radius), 3f)
+                        drawLine(
+                            Color(0xFF388E3C),
+                            center,
+                            center + Offset(startDir.x * radius, startDir.y * radius),
+                            3f
+                        )
+                        drawLine(
+                            Color(0xFF388E3C),
+                            center,
+                            center + Offset(endDir.x * radius, endDir.y * radius),
+                            3f
+                        )
                     } else {
                         // preview circle
                         drawCircle(Color(0xFF388E3C), radius, center, style = Stroke(width = 2f))
@@ -780,27 +1036,105 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                     }
                 }
 
-                // Snap highlight with visual affordance - larger and more attractive
-                highlight?.let { hp ->
-                    val center = w2s(hp)
-                    val baseRadius = 12f
+                // Enhanced snap indicators if enabled
+                if (state.showSnapIndicators && highlight != null) {
+                    val center = w2s(highlight!!)
 
-                    // Different colors for different snap types
-                    val color = when (lastSnap) {
-                        "point" -> Color(0xFF2E7D32) // Green for points
-                        "segment" -> Color(0xFF1976D2) // Blue for segments
-                        "grid" -> Color(0xFF757575) // Gray for grid
-                        else -> Color(0xFF2E7D32)
+                    // Determine snap type based on lastSnap
+                    val snapType = when (lastSnap) {
+                        "point" -> SnapType.POINT
+                        "segment" -> SnapType.SEGMENT
+                        "grid" -> SnapType.GRID
+                        "angleHard" -> SnapType.ANGLE
+                        else -> SnapType.POINT
+                    }
+
+                    // Draw enhanced snap indicator using Canvas
+                    val baseRadius = 12f
+                    val color = when (snapType) {
+                        SnapType.POINT -> Color(0xFF2E7D32) // Green for points
+                        SnapType.SEGMENT -> Color(0xFF1976D2) // Blue for segments
+                        SnapType.GRID -> Color(0xFF757575) // Gray for grid
+                        SnapType.ANGLE -> Color(0xFFE91E63) // Pink for angles
                     }
 
                     // Outer glow ring
-                    drawCircle(color.copy(alpha = 0.3f), baseRadius + 6f, center, style = Stroke(width = 3f))
+                    drawCircle(
+                        color.copy(alpha = 0.3f),
+                        baseRadius + 6f,
+                        center,
+                        style = Stroke(width = 3f)
+                    )
                     // Main ring
                     drawCircle(color, baseRadius + 2f, center, style = Stroke(width = 4f))
                     // Inner circle
                     drawCircle(color, baseRadius, center, style = Stroke(width = 2f))
                     // Center dot
                     drawCircle(color, 5f, center)
+
+                    // Draw type-specific indicators
+                    when (snapType) {
+                        SnapType.POINT -> {
+                            // Draw crosshair
+                            val crossSize = baseRadius * 0.8f
+                            drawLine(
+                                color,
+                                Offset(center.x - crossSize, center.y),
+                                Offset(center.x + crossSize, center.y),
+                                2f
+                            )
+                            drawLine(
+                                color,
+                                Offset(center.x, center.y - crossSize),
+                                Offset(center.x, center.y + crossSize),
+                                2f
+                            )
+                        }
+
+                        SnapType.SEGMENT -> {
+                            // Draw line indicator
+                            val lineLength = baseRadius * 1.2f
+                            drawLine(
+                                color,
+                                Offset(center.x - lineLength, center.y),
+                                Offset(center.x + lineLength, center.y),
+                                3f
+                            )
+                        }
+
+                        SnapType.GRID -> {
+                            // Draw grid pattern
+                            val gridSize = baseRadius * 0.6f
+                            drawLine(
+                                color,
+                                Offset(center.x - gridSize, center.y - gridSize),
+                                Offset(center.x + gridSize, center.y + gridSize),
+                                2f
+                            )
+                            drawLine(
+                                color,
+                                Offset(center.x + gridSize, center.y - gridSize),
+                                Offset(center.x - gridSize, center.y + gridSize),
+                                2f
+                            )
+                        }
+
+                        SnapType.ANGLE -> {
+                            // Draw angle arc
+                            drawArc(
+                                color,
+                                0f,
+                                90f,
+                                false,
+                                Offset(center.x - baseRadius * 0.8f, center.y - baseRadius * 0.8f),
+                                androidx.compose.ui.geometry.Size(
+                                    baseRadius * 1.6f,
+                                    baseRadius * 1.6f
+                                ),
+                                style = Stroke(width = 3f)
+                            )
+                        }
+                    }
                 }
             }
 
@@ -808,7 +1142,13 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
             Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = 56.dp, start = 12.dp)
+                    .padding(
+                        top = if (isLandscape) 8.dp else 56.dp,
+                        start = if (isLandscape) 4.dp else 12.dp,
+                        end = if (isLandscape) 4.dp else 0.dp,
+                        bottom = if (isLandscape) 0.dp else 16.dp
+                    )
+                    .widthIn(max = if (isLandscape) 120.dp else 200.dp)
                     .background(
                         brush = Brush.verticalGradient(
                             colors = listOf(
@@ -828,18 +1168,45 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                         ),
                         shape = RoundedCornerShape(16.dp)
                     )
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .padding(
+                        horizontal = if (isLandscape) 4.dp else 12.dp,
+                        vertical = if (isLandscape) 4.dp else 8.dp
+                    )
             ) {
+                // Compact precision display at the top
+                if (state.showMeasurements) {
+                    CompactPrecisionDisplay(
+                        calibrationData = calibrationData,
+                        frameRateMonitor = frameRateMonitor,
+                        currentPosition = if (mode == Mode.Pencil || mode == Mode.Line) currentPos else null,
+                        lastPosition = if (mode == Mode.Pencil || mode == Mode.Line) lastPos else null,
+                        currentAngle = if (mode == Mode.Protractor) currentAngle else null,
+                        currentRadius = if (mode == Mode.Compass) currentRadius else null,
+                        hudText = hud,
+                        isVisible = state.showMeasurements
+                    )
+                }
                 // Drawing modes with circular icons (scrollable)
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier
+                        .heightIn(max = if (isLandscape) 200.dp else 500.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(if (isLandscape) 1.dp else 6.dp)
                 ) {
                     // Move/Drag tool
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         CircularIconButton(
-                            onClick = { mode = Mode.Move },
+                            onClick = {
+                                mode = Mode.Move
+                                if (state.hapticFeedback) {
+                                    hapticManager.triggerToolSelectionFeedback(
+                                        haptic,
+                                        state.hapticFeedback
+                                    )
+                                }
+                            },
                             selected = mode == Mode.Move,
                             icon = Icons.Default.PanTool,
                             contentDescription = "Move/Drag Tool"
@@ -847,16 +1214,26 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                         Text(
                             text = "Move",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (mode == Mode.Move) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                            color = if (mode == Mode.Move) MaterialTheme.colorScheme.primary else Color.Black.copy(
+                                alpha = 0.9f
+                            )
                         )
                     }
-                    
+
                     // Pencil tool
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         CircularIconButton(
-                            onClick = { mode = Mode.Pencil },
+                            onClick = {
+                                mode = Mode.Pencil
+                                if (state.hapticFeedback) {
+                                    hapticManager.triggerToolSelectionFeedback(
+                                        haptic,
+                                        state.hapticFeedback
+                                    )
+                                }
+                            },
                             selected = mode == Mode.Pencil,
                             icon = Icons.Default.Edit,
                             contentDescription = "Pencil Tool"
@@ -864,16 +1241,26 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                         Text(
                             text = "Pencil",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (mode == Mode.Pencil) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                            color = if (mode == Mode.Pencil) MaterialTheme.colorScheme.primary else Color.Black.copy(
+                                alpha = 0.9f
+                            )
                         )
                     }
-                    
+
                     // Line tool
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         CircularIconButton(
-                            onClick = { mode = Mode.Line },
+                            onClick = {
+                                mode = Mode.Line
+                                if (state.hapticFeedback) {
+                                    hapticManager.triggerToolSelectionFeedback(
+                                        haptic,
+                                        state.hapticFeedback
+                                    )
+                                }
+                            },
                             selected = mode == Mode.Line,
                             icon = Icons.Default.ShowChart,
                             contentDescription = "Line Tool"
@@ -881,10 +1268,12 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                         Text(
                             text = "Line",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (mode == Mode.Line) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                            color = if (mode == Mode.Line) MaterialTheme.colorScheme.primary else Color.Black.copy(
+                                alpha = 0.9f
+                            )
                         )
                     }
-                    
+
                     // Ruler line tool
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -898,10 +1287,12 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                         Text(
                             text = "Ruler",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (mode == Mode.RulerLine) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                            color = if (mode == Mode.RulerLine) MaterialTheme.colorScheme.primary else Color.Black.copy(
+                                alpha = 0.9f
+                            )
                         )
                     }
-                    
+
                     // Square line tool
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -915,16 +1306,26 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                         Text(
                             text = "Square",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (mode == Mode.SquareLine) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                            color = if (mode == Mode.SquareLine) MaterialTheme.colorScheme.primary else Color.Black.copy(
+                                alpha = 0.9f
+                            )
                         )
                     }
-                    
+
                     // Protractor tool
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         CircularIconButton(
-                            onClick = { mode = Mode.Protractor },
+                            onClick = {
+                                mode = Mode.Protractor
+                                if (state.hapticFeedback) {
+                                    hapticManager.triggerToolSelectionFeedback(
+                                        haptic,
+                                        state.hapticFeedback
+                                    )
+                                }
+                            },
                             selected = mode == Mode.Protractor,
                             icon = Icons.Default.Explore,
                             contentDescription = "Protractor Tool"
@@ -932,16 +1333,26 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                         Text(
                             text = "Protractor",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (mode == Mode.Protractor) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                            color = if (mode == Mode.Protractor) MaterialTheme.colorScheme.primary else Color.Black.copy(
+                                alpha = 0.9f
+                            )
                         )
                     }
-                    
+
                     // Compass tool
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         CircularIconButton(
-                            onClick = { mode = Mode.Compass },
+                            onClick = {
+                                mode = Mode.Compass
+                                if (state.hapticFeedback) {
+                                    hapticManager.triggerToolSelectionFeedback(
+                                        haptic,
+                                        state.hapticFeedback
+                                    )
+                                }
+                            },
                             selected = mode == Mode.Compass,
                             icon = Icons.Default.RadioButtonUnchecked,
                             contentDescription = "Compass Tool"
@@ -949,38 +1360,25 @@ fun DrawingScreen(vm: DrawingViewModel = viewModel()) {
                         Text(
                             text = "Compass",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (mode == Mode.Compass) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.9f)
+                            color = if (mode == Mode.Compass) MaterialTheme.colorScheme.primary else Color.Black.copy(
+                                alpha = 0.9f
+                            )
                         )
                     }
                 }
             }
 
-            if (hud.isNotEmpty() && (mode == Mode.Line || mode == Mode.RulerLine || mode == Mode.SquareLine || mode == Mode.Protractor || mode == Mode.Compass)) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(12.dp)
-                        .background(Color(0xAA000000))
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        hud,
-                        color = Color.White
-                    )
-                    if (mode == Mode.Line || mode == Mode.RulerLine || mode == Mode.SquareLine || mode == Mode.Compass) {
-                        Text(
-                            "Calibrated for ${dpi.toInt()}dpi (${String.format("%.2f", mmPerPx)}mm/px)",
-                            color = Color(0xFFCCCCCC),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Text(
-                            "FPS: ${String.format("%.1f", frameRateMonitor.getCurrentFps())}",
-                            color = Color(0xFFCCCCCC),
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
+
+            // Enhanced Grid Visualization
+            if (state.showGrid) {
+                EnhancedGridVisualization(
+                    gridSpacingMm = state.gridSpacingMm,
+                    viewport = state.viewport,
+                    isVisible = state.showGrid,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
+
         }
     }
 }
@@ -992,12 +1390,19 @@ private fun saveToGallery(ctx: Context, state: DrawingState, width: Int, height:
         // Save to gallery using MediaStore (Android 10+)
         val contentResolver = ctx.contentResolver
         val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "snappy_ruler_${System.currentTimeMillis()}.png")
+            put(
+                MediaStore.MediaColumns.DISPLAY_NAME,
+                "snappy_ruler_${System.currentTimeMillis()}.png"
+            )
             put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
-            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/SnappyRulerSet")
+            put(
+                MediaStore.MediaColumns.RELATIVE_PATH,
+                Environment.DIRECTORY_PICTURES + "/SnappyRulerSet"
+            )
         }
 
-        val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+        val uri =
+            contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
         uri?.let { imageUri ->
             contentResolver.openOutputStream(imageUri)?.use { outputStream ->
                 val bitmap = DrawingExportManager.createBitmap(state, state.viewport, width, height)
@@ -1117,25 +1522,25 @@ fun CircularIconButton(
     } else {
         Color.White.copy(alpha = 0.8f)
     }
-    
+
     val iconColor = if (selected) {
         MaterialTheme.colorScheme.primary
     } else {
         Color.Black.copy(alpha = 0.8f)
     }
-    
+
     val borderColor = if (selected) {
         MaterialTheme.colorScheme.primary
     } else {
         Color.Black.copy(alpha = 0.3f)
     }
-    
+
     val shadowColor = if (selected) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
     } else {
         Color.Black.copy(alpha = 0.2f)
     }
-    
+
     IconButton(
         onClick = onClick,
         modifier = Modifier
